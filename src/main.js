@@ -6,8 +6,8 @@ const get_cell_pos = function(array, screen, map) {
     array.forEach((row, y) => {
         row.forEach((value, x) => {
 
-            let cell_pos_x = 0 + map.cell_size * x;
-            let cell_pos_y = 0 + map.cell_size * y;
+            let cell_pos_x = map.pos_x + map.cell_size * x;
+            let cell_pos_y = map.pos_y + map.cell_size * y;
 
             if (value != 0) {
                 grid.push({"pos_x": cell_pos_x, "pos_y": cell_pos_y, "size": map.cell_size});
@@ -47,12 +47,14 @@ const Game_map = function(screen, map_data) {
     map.width = map_data.width / map.scale;
     map.height = map_data.height / map.scale;
 
+    map.pos_x = screen.width / 2 - map.width / 2;
+    map.pos_y = screen.height / 2 - map.height / 2;
+
     map.collision_2d = cast_to_2d(map_data.collisions);
     map.collisions = get_cell_pos(map.collision_2d, screen, map);
-    console.log(map.collisions);
-    
+
     map.render = function() {
-        screen.ctx.drawImage(map.sprite, 0, 0, map.width, map.height);
+        screen.ctx.drawImage(map.sprite, map.pos_x, map.pos_y, map.width, map.height);
 
         map.collisions.forEach(cell => {
             screen.ctx.fillStyle = "rgba(200, 0, 0, .3)"
@@ -78,10 +80,12 @@ const Sprite = function(screen, map) {
     };
 
     sprite.check_collision = function() {
+        sprite.collide = false;
+
         map.collisions.forEach(cell => {
 
             if (sprite.collisions_detection(cell)) { 
-                console.log("collide");
+                // console.log("collide");
                 sprite.collide = true;   
             }; 
         });
@@ -91,25 +95,21 @@ const Sprite = function(screen, map) {
     
     sprite.update = function() {
         if (sprite.direction.get("right")) {
-            sprite.collide = false;
             sprite.right = 0; sprite.left = sprite.down = sprite.up = sprite.resize; 
             sprite.check_collision();
             if (!sprite.collide) { sprite.pos_x += sprite.speed; };
         }
         else if (sprite.direction.get("left")) {
-            sprite.collide = false;
             sprite.left = 0; sprite.right = sprite.down = sprite.up = sprite.resize;
             sprite.check_collision();
             if (!sprite.collide) { sprite.pos_x -= sprite.speed; };
         }
         else if (sprite.direction.get("down")) {
-            sprite.collide = false;
             sprite.down = 0; sprite.right = sprite.left = sprite.up = sprite.resize;
             sprite.check_collision();
             if (!sprite.collide) { sprite.pos_y += sprite.speed; };
         }     
         else if (sprite.direction.get("up")) {
-            sprite.collide = false;
             sprite.up = 0; sprite.right = sprite.left = sprite.down = sprite.resize;
             sprite.check_collision();
             if (!sprite.collide) { sprite.pos_y -= sprite.speed; };
@@ -138,6 +138,8 @@ const Player = function(screen, map) {
     addEventListener("keydown", key => { player.user_input(key.keyCode, true) });
     addEventListener("keyup", key => { player.user_input(key.keyCode, false) });
 
+
+
     player.user_input = function(key, value) {
         if (key == 68) { player.direction.set("right", value) };
         if (key == 65) { player.direction.set("left", value)};
@@ -146,6 +148,22 @@ const Player = function(screen, map) {
     };
 
     return player;
+};
+
+const Camera = function(screen, player, map) {
+    const camera = {};
+    camera.width = player.width * 15;
+    camera.height = player.height * 10; 
+
+    camera.render = function() {
+        camera.pos_x = player.pos_x - camera.width / 2 + player.width / 2;
+        camera.pos_y = player.pos_y - camera.height / 2 + player.height / 2;
+
+        screen.ctx.fillStyle = "rgba(50, 50, 50 .3)";
+        screen.ctx.fillRect(camera.pos_x, camera.pos_y, camera.width, camera.height);
+    };
+
+    return camera;
 };
 
 const game = function() {
@@ -157,12 +175,14 @@ const game = function() {
 
     const map = new Game_map(screen, first_map);
     const player = new Player(screen, map);
+    const camera = new Camera(screen, player, map);
 
     const update = function() {
         screen.ctx.clearRect(0, 0, screen.width, screen.height);
         
         map.render();
         player.update();
+        camera.render();
         
         window.requestAnimationFrame(update);
     };
