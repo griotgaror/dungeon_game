@@ -1,7 +1,7 @@
 "use strict";
 
-const get_cell_pos = function(array, screen, map, color) {
-    const grid = new Map();
+const get_cell_pos = function(array, screen, map) {
+    const grid = [];
 
     array.forEach((row, y) => {
         row.forEach((value, x) => {
@@ -10,11 +10,7 @@ const get_cell_pos = function(array, screen, map, color) {
             let cell_pos_y = 0 + map.cell_size * y;
 
             if (value != 0) {
-                screen.ctx.fillStyle = color;
-                screen.ctx.fillRect(cell_pos_x, cell_pos_y, map.cell_size - 2, map.cell_size - 2)
-                grid.set("pos_x", cell_pos_x);
-                grid.set("pos_y", cell_pos_y);
-                grid.set("size", map.cell_size);
+                grid.push({"pos_x": cell_pos_x, "pos_y": cell_pos_y, "size": map.cell_size});
             };
         });
     });
@@ -52,19 +48,73 @@ const Game_map = function(screen, map_data) {
     map.height = map_data.height / map.scale;
 
     map.collision_2d = cast_to_2d(map_data.collisions);
+    map.collisions = get_cell_pos(map.collision_2d, screen, map);
+    console.log(map.collisions);
     
     map.render = function() {
         screen.ctx.drawImage(map.sprite, 0, 0, map.width, map.height);
-        map.collisions = get_cell_pos(map.collision_2d, screen, map, "rgba(150, 0, 0, .3)");
+
+        map.collisions.forEach(cell => {
+            screen.ctx.fillStyle = "rgba(200, 0, 0, .3)"
+            screen.ctx.fillRect(cell.pos_x, cell.pos_y, cell.size - 2, cell.size - 2)
+        })
     };
 
     return map;
 };
 
-const Sprite = function(screen) {
+const Sprite = function(screen, map) {
     const sprite = {};
+    sprite.direction = new Map();
+    sprite.resize = 4;
 
+    sprite.collisions_detection = function(cell) {
+        let border_right = sprite.pos_x + sprite.width - sprite.right >= cell.pos_x;
+        let border_left  = sprite.pos_x + sprite.left <= cell.pos_x + cell.size;
+        let border_down  = sprite.pos_y + sprite.height - sprite.down >= cell.pos_y;
+        let border_up    = sprite.pos_y + sprite.up <= cell.pos_y + cell.size; 
+
+        return (border_right && border_left && border_down && border_up);
+    };
+
+    sprite.check_collision = function() {
+        map.collisions.forEach(cell => {
+
+            if (sprite.collisions_detection(cell)) { 
+                console.log("collide");
+                sprite.collide = true;   
+            }; 
+        });
+
+        return sprite.collide
+    };
+    
     sprite.update = function() {
+        if (sprite.direction.get("right")) {
+            sprite.collide = false;
+            sprite.right = 0; sprite.left = sprite.down = sprite.up = sprite.resize; 
+            sprite.check_collision();
+            if (!sprite.collide) { sprite.pos_x += sprite.speed; };
+        }
+        else if (sprite.direction.get("left")) {
+            sprite.collide = false;
+            sprite.left = 0; sprite.right = sprite.down = sprite.up = sprite.resize;
+            sprite.check_collision();
+            if (!sprite.collide) { sprite.pos_x -= sprite.speed; };
+        }
+        else if (sprite.direction.get("down")) {
+            sprite.collide = false;
+            sprite.down = 0; sprite.right = sprite.left = sprite.up = sprite.resize;
+            sprite.check_collision();
+            if (!sprite.collide) { sprite.pos_y += sprite.speed; };
+        }     
+        else if (sprite.direction.get("up")) {
+            sprite.collide = false;
+            sprite.up = 0; sprite.right = sprite.left = sprite.down = sprite.resize;
+            sprite.check_collision();
+            if (!sprite.collide) { sprite.pos_y -= sprite.speed; };
+        };
+
         screen.ctx.fillStyle = sprite.color
         screen.ctx.fillRect(sprite.pos_x, sprite.pos_y, sprite.width, sprite.height);
     };
@@ -72,13 +122,28 @@ const Sprite = function(screen) {
 };
 
 const Player = function(screen, map) {
-    const player = new Sprite(screen);
+    const player = new Sprite(screen, map);
     player.position_data = cast_to_2d(player_positions_data);
     player.data = get_cell_pos(player.position_data, screen, map);
-    player.width = player.height = player.data.get("size");
-    player.pos_x = player.data.get("pos_x");
-    player.pos_y = player.data.get("pos_y");
-    player.color = "rgba(200, 200, 200, .5)";
+
+    player.data.forEach(data => {
+        player.width = player.height = data.size
+        player.pos_x = data.pos_x;
+        player.pos_y = data.pos_y;
+    });
+
+    player.speed = 3;
+    player.color = "rgba(200, 200, 200, .4)";
+
+    addEventListener("keydown", key => { player.user_input(key.keyCode, true) });
+    addEventListener("keyup", key => { player.user_input(key.keyCode, false) });
+
+    player.user_input = function(key, value) {
+        if (key == 68) { player.direction.set("right", value) };
+        if (key == 65) { player.direction.set("left", value)};
+        if (key == 83) { player.direction.set("down", value)};
+        if (key == 87) { player.direction.set("up", value)};
+    };
 
     return player;
 };
@@ -92,7 +157,6 @@ const game = function() {
 
     const map = new Game_map(screen, first_map);
     const player = new Player(screen, map);
-    console.log(player.pos_x);
 
     const update = function() {
         screen.ctx.clearRect(0, 0, screen.width, screen.height);
